@@ -1,0 +1,326 @@
+Docker commands crash:
+
+syntax : docker <what element of docker you wanna use i.e., container/images/config/system/service/volume/context/network/node etc> <what action you wanna perform with that element run/stop/restart/kill/logs/push/pull/rename etc.> <additional options such as publish/detach etc.> <container/image name>
+
+eg:
+docker container run --publish 80:80 --detach --name webhost nginx 
+
+We have to first stop a container before removing it. If the container is not stopping,then
+to remove docker container which is running without stopping it
+
+docker container rm -f <containerID>
+
+To remove the docker images 
+docker rmi <image name or image id>
+
+To check what are the configs used in the containers while starting up
+docker container inspect <container name>
+
+To check the CPU, memory utilization, IO stats of the contaner
+docker stats <container name>
+
+To check the processes running inside a container
+docker container top <container name>
+
+To go inside a container that is already running:
+docker container exec -it <container name> bash
+
+To go inside a new container which we gonna run,
+docker container run -it <container name> <shell>
+
+To check the port to which the container is listening to 
+docker container port <container name>
+
+To check the IP address used by the container:
+docker container inspect --format '{{ .NetworkSettings.IPAddress }}' <container name>
+
+We can create multiple virtual networks inside the OS and make containers under those virtual networks. Bridge network drive allows the containers to talk to each other when running on the same docker host.
+
+To list the default network drivers
+docker network ls
+
+To create a new network
+docker network create <network name>
+
+To check the IP address, gateway of a network
+docker network inspect <network name>
+
+To create a container under a specific network
+docker container run -d --name <container name> --network <network name> <image name>
+
+To attach another network to a running container
+docker network connect <network name> <running container name>
+
+To check the details of the networks a container is attached to
+docker container inspect <container name>
+
+To check the details of the containers attached to a particular network
+docker network inspect <container>
+
+To remove a particular network from the container
+docker network disconnect <networ drive name> <container name>
+
+Docker containers inside a non-default network (bridge network) i.e., the network we created, can talk to each other using the DNS. The container name by default becomes their DNS name. So if the containers under the same non-default network gets restarted and their IP address gets changed, they can still ping each other due to their DNS name. Default bridge network does not offer this DNS feature by default to the containers using its network. It has to be manually created through link option (docker container run -d -n <container name> -link)
+
+
+
+Assignment : To check the curl version on two new containers Ubunty (14.04) and centos (7)
+
+docker container run -itd --name ubuntu_ass ubuntu:14.04
+docker container run -itd --name centos_ass centos:7
+
+docker container exec centos_ass curl --version
+Output:
+curl 7.29.0 (x86_64-redhat-linux-gnu) libcurl/7.29.0 NSS/3.44 zlib/1.2.7 libidn/1.28 libssh2/1.8.0
+Protocols: dict file ftp ftps gopher http https imap imaps ldap ldaps pop3 pop3s rtsp scp sftp smtp smtps telnet tftp
+
+docker container exec ubuntu_ass curl --version
+Output:
+OCI runtime exec failed: exec failed: container_linux.go:380: starting container process caused: exec: "curl": executable file not found in $PATH: unknown
+
+The above output in the ubuntu container shows that the curl library is not installed by default
+Need to install the curl inside the ubuntu container:
+Commands:
+docker container exec -it ubuntu_ass apt-get update
+docker container exec -it ubuntu_ass apt-get install curl
+
+Now the curl is installed inside the ubuntu container.
+Validate the curl version now:
+docker container exec -it ubuntu_ass curl --version
+Output:
+curl 7.35.0 (x86_64-pc-linux-gnu) libcurl/7.35.0 OpenSSL/1.0.1f zlib/1.2.8 libidn/1.28 librtmp/2.3
+Protocols: dict file ftp ftps gopher http https imap imaps ldap ldaps pop3 pop3s rtmp rtsp smtp smtps telnet tftp 
+Features: AsynchDNS GSS-Negotiate IDN IPv6 Largefile NTLM NTLM_WB SSL libz TLS-SRP 
+
+How to check the version of a particular software
+
+The below command will provide the curl version of a centos v7 linux OS by temporarily creating a container of that OS and finding the curl version:
+docker container run --rm --name centos centos:7 curl --version
+Output:
+curl 7.29.0 (x86_64-redhat-linux-gnu) libcurl/7.29.0 NSS/3.44 zlib/1.2.7 libidn/1.28 libssh2/1.8.0
+Protocols: dict file ftp ftps gopher http https imap imaps ldap ldaps pop3 pop3s rtsp scp sftp smtp smtps telnet tftp 
+
+Once the above command is executed, the container will terminate and it wont be appering under both ls and ls -a commands for docker container.
+
+Assignment : Round Robin Test DNS
+
+Create a dedicated network:
+docker network create dude
+
+Create two containers (elasticsearch) with same network and same name with DNS name (--net-alias)
+docker container run -itd --net dude --net-alias search elasticsearch:2
+docker container run -itd --net dude --net-alias search elasticsearch:2
+
+Since we did not mention the name of the container, the docker assumes a name to the containers and that will be the container's default DNS name. All we do is set an additional DNS name using (--net-alias)
+
+Now try to create a temporary alpine (linux) container under the same n/w as the above elasticsearch container and do a ping to the above created elastic search, you can see that the IP address of the DNS "search" is getting switched b/w the two elasticsearch containers.
+
+docker container run --rm --net dude alpine ping search
+PING search (172.19.0.3): 56 data bytes
+64 bytes from 172.19.0.3: seq=0 ttl=64 time=0.097 ms
+64 bytes from 172.19.0.3: seq=1 ttl=64 time=0.078 ms
+64 bytes from 172.19.0.3: seq=2 ttl=64 time=0.087 ms
+64 bytes from 172.19.0.3: seq=3 ttl=64 time=0.080 ms
+64 bytes from 172.19.0.3: seq=4 ttl=64 time=0.078 ms
+64 bytes from 172.19.0.3: seq=5 ttl=64 time=0.084 ms
+
+docker container run --rm --net dude alpine ping search
+PING search (172.19.0.2): 56 data bytes
+64 bytes from 172.19.0.2: seq=0 ttl=64 time=0.090 ms
+64 bytes from 172.19.0.2: seq=1 ttl=64 time=0.079 ms
+64 bytes from 172.19.0.2: seq=2 ttl=64 time=0.085 ms
+64 bytes from 172.19.0.2: seq=3 ttl=64 time=0.085 ms
+^C
+--- search ping statistics ---
+4 packets transmitted, 4 packets received, 0% packet loss
+round-trip min/avg/max = 0.079/0.084/0.090 ms
+
+
+To download an image from docker hub repository:
+docker pull <imagename>
+
+To login to your dockerhub account
+docker login 
+This will create a config.json under .docker folder in your home directory
+
+In order to create new lables for the existing image,
+docker tag image <Image Repository name> <New Image Name>
+Example:
+docker image ls
+REPOSITORY   TAG       IMAGE ID       CREATED         SIZE
+nginx        latest    0e901e68141f   8 days ago      142MB
+
+docker image tag nginx chidadockersundar/nginx
+docker image ls
+REPOSITORY                TAG       IMAGE ID       CREATED         SIZE
+chidadockersundar/nginx   latest    0e901e68141f   8 days ago      142MB
+nginx                     latest    0e901e68141f   8 days ago      142MB
+
+
+
+
+Dockerfile
+FROM : Minimal distribution (OS in a very smaller size) Eg: Ubuntu:latest
+ENV: Environment variable (mostly the verion in key and value pair) Eg: NGINX_VERSION 1.11.10-1-jessie
+RUN: Exection of shell commands inside the container. Add && at the end of each commands to make sure that they are part of the same layer.
+WORKDIR: To change the present working directory inside the container
+EXPOSE: List the ports you would like to open inside the container. 
+CMD: Final command which will run when you start, run the container
+
+Protip: Docker always caches the image whenever we build it and then for the subsequent changes that we make in the dockerfile, it will build only the lines that got changed and also will build the lines under the ones which we changed. So if you are creating a dockerfile, please make sure to put the steps that may require frequent changes at the last part of your docker file.
+
+To build the docker image:
+docker image build -t <tag name of the image you wanna give> <in which directory you wanna build the file>
+
+
+Create an apache and tomcat containers.
+Make the apache as a front end for the accessing the application deployed in tomcat
+
+Tomcat Dockerfile (tomcatdockerfile)
+
+FROM tomcat:latest
+WORKDIR /usr/local/tomcat/webapps
+COPY SampleWebApp.war SampleWebApp.war
+
+
+Apache Dockerfile¸(apachedockerfile)
+
+FROM httpd:latest
+WORKDIR /usr/local/apache2/conf
+copy httpd.conf httpd.conf
+
+
+1. Build the images first 
+	docker build -t myapache -f apachedockerfile .
+	docker build -t mytomcat -f tomcatdockerfile .
+2. Create a dedicated network 
+	docker network create my_app_net
+3. Create both apache and Tomcat containers under this dedicated network. Make sure to give the tomcat container name as mytomcat
+	docker container run -d -p 8080:8080 --network my_app_net --name mytomcat chidadockersundar/mytomcat:latest
+	docker container run -d -p 80:80 --network my_app_net --name myapache chidadockersundar/myapache:latest
+
+4. Hit the URL
+
+
+Now to push the image, first change the label from myapache, mytomcat to <dockerusername>/<imagename>
+docker image tag myapache:latest chidadockersundar/myapache:latest
+docker image tag mytomcat:latest chidadockersundar/mytomcat:latest
+
+Then push the image:
+docker image push chidadockersundar/myapache:latest
+docker image push chidadockersundar/mytomcat:latest
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+Docker Swarm:
+docker info |grep -i swarm
+ Swarm: inactive
+
+ By default swarm is inactive and you need to activate the swarm :
+ docker swarm init
+
+
+Once the docker swarm is initiated, you can use other swarm features like nodes, service etc.
+
+By default, a node is initiated with a manager when the swarm is initiated.
+docker node ls
+ID                            HOSTNAME           STATUS    AVAILABILITY   MANAGER STATUS   ENGINE VERSION
+4gr1fmgtz5kctidsmgaa4ovz6 *   ip-172-31-32-216   Ready     Active         Leader           20.10.14
+
+You can create a service after this. 
+A docker "service" is one or more containers with the same image running under docker's swarm mode. Docker run is running multiple containers with different images in each.
+If you stop a container which was created using docker run command, the container will be stopped. But if you try to stop a container created using docker service, the container will be stopped for a moment and it gets started in few seconds.
+
+To create a docker service of the image chidadockersundar/mytomcat,
+docker service create -p 8080:8080 --name mytomcat chidadockersundar/mytomcat:latest
+
+To check if the servie is created well, use below command. You can see a service ID being created. Also in the Replicas colum, you can see there is by default one replica of this container being initiated:
+docker service ls
+ID             NAME       MODE         REPLICAS   IMAGE                               PORTS
+mthe11dnaxna   mytomcat   replicated   1/1        chidadockersundar/mytomcat:latest   *:8080->8080/tcp
+
+Create multiple replicas using:
+docker service update --replicas 2 <service id>
+
+To check the containers list now,
+docker container ls
+CONTAINER ID   IMAGE                               COMMAND             CREATED          STATUS          PORTS      NAMES
+cc6af17f3563   chidadockersundar/mytomcat:latest   "catalina.sh run"   11 minutes ago   Up 11 minutes   8080/tcp   mytomcat.1.x39tk5xd6lhxulwkjdvpexqzt
+93b555a1771a   chidadockersundar/mytomcat:latest   "catalina.sh run"   11 minutes ago   Up 11 minutes   8080/tcp   mytomcat.2.d47l6mk83arpruzhgz15xg882
+
+
+To know the life cycle of the replicas you created within a service, use below command:
+docker service ps <service id>
+ID             NAME             IMAGE                               NODE               DESIRED STATE   CURRENT STATE            ERROR                         PORTS
+x39tk5xd6lhx   mytomcat.1       chidadockersundar/mytomcat:latest   ip-172-31-32-216   Running         Running 10 minutes ago                                 
+zovwqr5odjx0    \_ mytomcat.1   chidadockersundar/mytomcat:latest   ip-172-31-32-216   Shutdown        Failed 10 minutes ago    "task: non-zero exit (137)"   
+ywgae9plggsp    \_ mytomcat.1   chidadockersundar/mytomcat:latest   ip-172-31-32-216   Shutdown        Failed 14 minutes ago    "task: non-zero exit (137)"   
+d47l6mk83arp   mytomcat.2       chidadockersundar/mytomcat:latest   ip-172-31-32-216   Running         Running 10 minutes ago                                 
+abrv3qe153o1    \_ mytomcat.2   chidadockersundar/mytomcat:latest   ip-172-31-32-216   Shutdown        Failed 10 minutes ago    "task: non-zero exit (137)"   
+
+
+
+To remove the service,
+docker service rm <service name>
+
+
+
+To create docker swarm cluster on 3 different VMs.
+I used play-with-docker to create 3 VMs for free (only for 4 hours)
+
+Once 3 nodes are created in the website, on the node01
+docker swarm init --advertise-addr <IP of the node>
+
+	Swarm initialized: current node (fq1c3tj5k2n24rmtp9lk70aj6) is now a manager.
+
+	To add a worker to this swarm, run the following command:
+
+    	docker swarm join --token SWMTKN-1-1acdr7vxhsqhbj7gurk5udaljq8q7tzbvxpgvhl48a6wlwtgpd-15ltbpqjroywdirj7pq3zogx9 192.168.0.13:2377
+
+	To add a manager to this swarm, run 'docker swarm join-token manager' and follow the instructions.
+
+
+By default, node01 becomes a manager (leader)
+
+Now make node02 and node03 to be the workers of this manager
+
+
+
+
+
+Docker slideshow notes:
+Why moving towards container is a master stroke:
+
+As the times changes, the traditional Banks are not just competing only with other banks. They are now competing with Fintech companies like Paypal, Revolt who are rolling out new features almost every week..!
+For banks, in order to cope up with the competition against the fintech companies, they need to speed up their innovation and the deployment cycles. 
+Traditional banks are under a constant pressure to be more agile with their software delivery in order to build better and more fully featured online experiences for their customers.
+
+Containers are an incredibly powerful toolset which makes it easier to build, ship and run applications. By leveraging these tools, banks can solve the challenge of needing to innovate against a complex, interconnected legacy software environment.
+
+For a bank like ABN AMRO which is relying heavily on its Mainframe systems for majority of its applications, zCX opens a wider window, allowing the bank to TO INNOVATE AND SHIP EVEN MORE HIGH QUALITY SOFTWARE MORE FREQUENTLY THAN BEFORE”
+
+	
+
+
+
+Advantages of Containers:
+More Consistant operation: applications in containers will run the same, regardless of where they are deployed
+Less Overhead: Containers require less system resources than traditional or hardware virtual machine environments because they don’t include operating system images.
+Better app development: Containers support agile and DevOps efforts to accelerate development, test, and production cycles.
+Increased Portability: Applications running in containers can be deployed easily to multiple different operating systems and hardware platforms. 
+Greater Efficiency: Containers allow applications to be more rapidly deployed, patched, or scaled.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
